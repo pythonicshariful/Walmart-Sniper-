@@ -1,6 +1,6 @@
 # 🛒 Walmart Sniper — Tampermonkey Script
 
-A smart, lightweight automation bot for Walmart.com that monitors stock availability in real time and automatically purchases items when they come in stock at or below your target price.
+A smart, lightweight, professional-grade automation bot for Walmart.com. It monitors stock availability in real time and automatically purchases items when they come in stock at or below your target price.
 
 ---
 
@@ -11,12 +11,15 @@ A smart, lightweight automation bot for Walmart.com that monitors stock availabi
 - **💰 Price Threshold** — Only triggers a purchase if the price is at or below your set limit
 - **🛒 Full Auto-Buy Flow** — Clicks Buy Now → sets quantity → enters CVV → places order
 - **🔄 SPA Navigation Support** — Works seamlessly as you navigate Walmart without full page reloads
-- **💾 Persistent Settings** — All settings (price, quantity, CVV) are saved in your browser automatically
-- **🎨 Beautiful Glassmorphism UI** — Sleek floating panel that shows real-time status
+- **💾 Persistent Settings** — All settings (price, quantity, CVV, webhooks) are saved in your browser automatically
+- **📋 AutoBuy Whitelist** — Target specific items to automatically buy by adding them to your custom AutoBuy list
+- **⚡ Humanized Speed Profiles** — Choose between Aggressive, Balanced, Human, or Stealth modes with randomized interaction delays to evade anti-bot detection
+- **🔔 Webhook Notifications** — Get instant Restock and Purchase alerts sent directly to Discord and Telegram
+- **🎨 Beautiful Glassmorphism UI** — Sleek floating panel with an animated gradient header, neon glowing LED status indicators, collapsible sections, and a built-in activity log console
 
 ---
 
-## 🚀 Installation
+## 🚀 Installation & Permissions
 
 ### Prerequisites
 - A Chromium-based browser (Chrome, Edge, Brave) or Firefox
@@ -24,37 +27,41 @@ A smart, lightweight automation bot for Walmart.com that monitors stock availabi
 
 ### Steps
 
-1. Open the **Tampermonkey** extension and click **Create a new script**
-2. Delete the default code
-3. Copy and paste the entire contents of [`walmart_detector.user.js`](./walmart_detector.user.js)
-4. Press **Ctrl + S** (or File → Save)
-5. Navigate to [walmart.com](https://www.walmart.com) — the bot panel will appear in the bottom-right corner
+1. Open the **Tampermonkey** extension dashboard and click the **+ (Create a new script)** tab.
+2. Delete any default code in the editor.
+3. Copy and paste the entire contents of [`walmart_detector.user.js`](./walmart_detector.user.js).
+4. Press **Ctrl + S** (or File → Save).
+5. Ensure the script is **enabled** in Tampermonkey.
+6. Navigate to [walmart.com](https://www.walmart.com). The bot panel will appear in the bottom-right corner.
+
+### 🛡️ Required Permissions
+The script requires the following Tampermonkey `@grant` permissions to function correctly:
+- `@grant unsafeWindow` — To intercept Walmart's internal GraphQL/REST fetch and XHR responses.
+- `@grant GM_notification` — To show system-level desktop notifications on successful purchases.
+
+*Note: For webhook notifications to Discord and Telegram, your browser will make standard `fetch()` requests directly from the Walmart page.*
 
 ---
 
 ## 🖥️ UI Overview
 
-The floating panel appears in the **bottom-right corner** of every Walmart page.
+The floating panel appears in the **bottom-right corner** of every Walmart page. You can click the **`-` minimize button** in the header to collapse the bot when you want it out of the way.
 
 ```
-┌────────────────────────────────┐
-│ WALMART BOT V2.0               │
-│ ● Product Page                 │
-│ ┌──────────────────────────┐   │
-│ │ 🟢 IN STOCK   $41.99    │   │
-│ └──────────────────────────┘   │
-│ ─────────────────────────────  │
-│ Max Price ($)      [ 50.00 ]   │
-│ Quantity           [    1  ]   │
-│ CVV                [ ···  ]   │
-│ ┌──────────────────────────┐   │
-│ │     Auto Buy: OFF        │   │
-│ └──────────────────────────┘   │
-└────────────────────────────────┘
+┌──────────────────────────────────────┐
+│ 🎯 Walmart Sniper v2.2            −  │
+│ ──────────────────────────────────── │
+│ 🟢 Product Page                      │
+│ 📦 ✔ IN STOCK          [ $41.99 ]    │
+│ ＋ Add to AutoBuy List                │
+│                                      │
+│ 🛒 AutoBuy List                  (1) ▼│
+│ ⚙️ Settings                         ▼│
+│ 📋 Activity Log                  (0) ▼│
+└──────────────────────────────────────┘
 ```
 
 ### LED Indicator Colors
-
 | Color | Page |
 |---|---|
 | 🟣 Violet | Home Page |
@@ -64,33 +71,46 @@ The floating panel appears in the **bottom-right corner** of every Walmart page.
 | 🔵 Blue | Other Page |
 
 ### Stock Dot Colors
-
 | Color | Status |
 |---|---|
-| 🟢 Green | In Stock |
+| 🟢 Green (Pulsing) | In Stock |
 | 🔴 Red | Out of Stock |
-| ⚫ Gray | Unknown / Checking |
+| ⚫ Gray | Unknown / Checking / Searching |
 
 ---
 
-## ⚙️ Configuration
+## ⚙️ Configuration & Usage
 
-All settings are configured directly in the floating UI panel, which appears on Product and Checkout pages.
+All settings are configured directly in the collapsible **Settings** section of the UI panel.
 
-| Setting | Description | Default |
-|---|---|---|
-| **Max Price ($)** | Bot will only buy if the current price ≤ this value | `$50.00` |
-| **Quantity** | Number of items to add before placing the order | `1` |
-| **CVV** | Card Verification Value for your saved payment method | *(empty)* |
-| **Auto Buy** | Toggle to enable/disable the automated purchase flow | `OFF` |
+### Core Settings
+| Setting | Description |
+|---|---|
+| **Max Price ($)** | Bot will only trigger a buy if the item price is ≤ this value. |
+| **Quantity** | Number of items to add before placing the order (1-99). |
+| **CVV** | The 3- or 4-digit CVV for your saved payment method on Walmart. |
+| **Bot Speed** | Controls the delay between clicks and navigation. Choose from: **⚡ Aggressive**, **🎯 Balanced**, **🐢 Human**, or **🥷 Stealth**. |
+| **Auto Buy** | Master toggle to enable/disable the automated purchase flow. |
 
-> All settings are saved automatically to your browser's `localStorage` and persist between sessions.
+### Webhook Alerts
+You can receive instant messages when an item restocks or when the bot successfully buys it.
+- **Discord Webhook URL**: Paste your Discord channel webhook URL.
+- **Telegram Bot Token**: The token for your Telegram Bot (e.g., `123456:ABC-DEF`).
+- **Telegram Chat ID**: The ID of the chat/channel you want the bot to message.
+*Click **🔔 Send Test Alert** to verify your webhooks are working properly.*
+
+### AutoBuy List (Whitelist)
+To prevent the bot from buying random items, you can curate an **AutoBuy List**.
+1. Navigate to a product page you want to snipe.
+2. Click **＋ Add to AutoBuy List**.
+3. Turn **Auto Buy: ON**.
+4. The bot will now actively monitor and snipe this item as soon as it goes in stock below your Max Price.
 
 ---
 
 ## 📡 Stock Monitoring Architecture
 
-The bot uses a **4-layer system** to detect stock changes as fast as possible while minimizing bot-detection risk:
+The bot uses a **4-layer system** to detect stock changes instantly while minimizing bot-detection risk:
 
 ### Layer 1 — Fetch & XHR Interceptor *(Primary)*
 Overrides `window.fetch` and `XMLHttpRequest` to silently read every API response Walmart's own JavaScript makes. When Walmart's internal GraphQL/REST API returns `availabilityStatus: "IN_STOCK"`, the bot reacts **within milliseconds** — generating **zero extra network requests**.
@@ -99,46 +119,43 @@ Overrides `window.fetch` and `XMLHttpRequest` to silently read every API respons
 Watches the "Buy Now" and "Add to Cart" buttons for any DOM state change (appearing, becoming enabled). Reacts instantly with no extra requests.
 
 ### Layer 3 — Lightweight Background Poll *(Safety Net)*
-If the page sits idle and Walmart makes no native API calls, the bot periodically fetches **only** the lightweight item endpoint:
-```
-GET /api/2/items?ids={itemId}
-```
-Polls at a **randomized 45–90 second interval** to mimic human browsing behavior and avoid bot-detection rate limits. This is ~20KB vs a 2–5MB full page reload.
+If the page sits idle and Walmart makes no native API calls, the bot periodically fetches **only** the lightweight item endpoint: `GET /api/2/items?ids={itemId}`
+Polls at a **randomized 45–90 second interval** to mimic human browsing behavior and avoid rate limits.
 
 ### Layer 4 — `__NEXT_DATA__` Reader *(Initial Load)*
-On every product page load, immediately reads the embedded `<script id="__NEXT_DATA__">` JSON tag that Walmart's Next.js server injects. This gives the current stock status instantly, with zero extra requests.
+On every product page load, immediately reads the embedded `<script id="__NEXT_DATA__">` JSON tag that Walmart's Next.js server injects.
 
 ---
 
 ## 🤖 Auto-Buy Flow
 
-When Auto Buy is **ON** and stock is detected at or below your Max Price:
+When Auto Buy is **ON**, the item is on your **AutoBuy List**, and stock is detected at or below your Max Price:
 
-```
+```text
 1. Detect IN_STOCK via any monitoring layer
       ↓
-2. Click "Buy Now" button
+2. Click "Buy Now" button (with humanized pointer events + delay)
       ↓
-3. Wait for slide panel → increment quantity to target
+3. Wait for slide panel → click "Checkout" or increment quantity
       ↓
-4. Click "Enter your CVV" (redirects to checkout)
+4. If Buy Now fails, fall back to "Add to Cart" → Direct Navigation to Checkout
       ↓
 5. On checkout page:
    - Inject saved CVV into form field
    - Click "Place order" button (retries every 50ms until successful)
+      ↓
+6. Play success chime, display on-screen banner, and fire webhooks!
 ```
 
 ---
 
-## 🛡️ Bot Detection Avoidance
+## 🛡️ Anti-Bot Evasion
 
-| Technique | Why it Helps |
+| Technique | How it helps |
 |---|---|
-| **Intercept, don't request** | Reads Walmart's own traffic — no fingerprint |
-| **Randomized polling (45–90s)** | No predictable cadence to trigger rate limiters |
-| **Lightweight API endpoint** | Tiny JSON call, not a full page reload |
-| **MutationObserver** | No tight DOM polling loops |
-| **React-native input setter** | CVV injection is indistinguishable from real user input |
+| **Humanized Delays** | Introduces randomized `setTimeout` pauses between clicks (based on your Bot Speed setting). |
+| **Realistic Click Events** | Synthesizes full pointer sequences (`pointerover`, `mouseenter`, `pointerdown`, `pointerup`, `click`) to bypass basic event listeners. |
+| **Passive Monitoring** | Reads Walmart's own traffic instead of hammering the servers with manual `fetch` loops. |
 
 ---
 
@@ -146,38 +163,23 @@ When Auto Buy is **ON** and stock is detected at or below your Max Price:
 
 This script is provided for **educational and personal research purposes only**.
 
-- Automating purchases on Walmart.com may violate their [Terms of Use](https://www.walmart.com/help/article/walmart-com-terms-of-use/3b75080af40340d6bbd596f116fae5a0)
-- Use at your own risk — your account or IP could be suspended
-- The author takes no responsibility for any bans, financial losses, or other consequences
-
----
-
-## 🗂️ File Structure
-
-```
-walmart/
-├── walmart_detector.user.js   ← Main Tampermonkey script
-└── README.md                  ← This file
-```
+- Automating purchases on Walmart.com may violate their [Terms of Use](https://www.walmart.com/help/article/walmart-com-terms-of-use/3b75080af40340d6bbd596f116fae5a0).
+- Use at your own risk — your account or IP could be suspended.
+- The author takes no responsibility for any bans, financial losses, or other consequences.
 
 ---
 
 ## 📝 Changelog
 
+### v2.2
+- **New Feature**: Discord & Telegram Webhook integration.
+- **New Feature**: 4 Humanized Bot Speed profiles (Aggressive, Balanced, Human, Stealth).
+- **New Feature**: Item Whitelist (AutoBuy List) to control exactly what gets purchased.
+- **UI Update**: Complete redesign with dark mode glassmorphism, animated neon LEDs, collapsible sections, and an activity log console.
+
 ### v2.0
-- Complete rewrite with 4-layer smart stock monitoring
-- Added Fetch + XHR interceptor (Layer 1) — zero extra requests
-- Added DOM MutationObserver (Layer 2)
-- Added lightweight randomized background poll (Layer 3)
-- Added `__NEXT_DATA__` reader (Layer 4)
-- Improved UI with real-time stock status dot and price badge
-- Fixed CVV injection using React native input setter
-- Checkout bot now retries every 50ms until order is placed
-- SPA URL change detection improved
+- Complete rewrite with 4-layer smart stock monitoring.
+- Added Fetch + XHR interceptor (Layer 1) — zero extra requests.
 
 ### v1.0
-- Initial release
-- Page type detection (Home / Search / Product / Checkout)
-- Basic price monitoring and auto-buy flow
-- CVV input and checkout automation
-- Glassmorphism UI panel
+- Initial release.
