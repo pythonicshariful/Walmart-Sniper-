@@ -1981,10 +1981,11 @@
     function findCvvField() {
         const tests = [
             () => document.getElementById('cvv-field'),
-            () => document.querySelector('input[name="cvv"], input[name="CVV"], input[name="Cvv"]'),
-            () => document.querySelector('input[id*="cvv" i]'),
-            () => document.querySelector('input[autocomplete="cc-csc"], input[autocomplete="cc-cvc"], input[inputmode="numeric"][type="password"]'),
+            () => document.querySelector('input[name="cvv"]:not(#wpd-cvv), input[name="CVV"]:not(#wpd-cvv), input[name="Cvv"]:not(#wpd-cvv)'),
+            () => document.querySelector('input[id*="cvv" i]:not(#wpd-cvv)'),
+            () => document.querySelector('input[autocomplete="cc-csc"], input[autocomplete="cc-cvc"], input[inputmode="numeric"][type="password"]:not(#wpd-cvv)'),
             () => Array.from(document.querySelectorAll('input[type="password"], input[type="text"], input[inputmode="numeric"]')).find(i => {
+                if (i.id === 'wpd-cvv') return false;
                 const ml = parseInt(i.getAttribute('maxlength') || '0', 10);
                 if (ml && (ml === 3 || ml === 4)) {
                     const p = (i.placeholder || '').toLowerCase();
@@ -2001,6 +2002,7 @@
                 return false;
             }),
             () => Array.from(document.querySelectorAll('input')).find(i => {
+                if (i.id === 'wpd-cvv') return false;
                 const p = (i.placeholder || '').toLowerCase();
                 const l = (i.getAttribute('aria-label') || '').toLowerCase();
                 const n = (i.name || '').toLowerCase();
@@ -2008,125 +2010,118 @@
                 return /cvv|csc|cvc|security|card.?code|3 digits/i.test(p + ' ' + l) || n.includes('cvv') || id.includes('cvv');
             }),
         ];
-        for (const fn of tests) { try { const r = fn(); if (r) return r; } catch (e) { } }
+        for (const fn of tests) { try { const r = fn(); if (r && r.id !== 'wpd-cvv') return r; } catch (e) { } }
         return null;
     }
 
     function fillInputField(field, value) {
-        if (!field) return false;
+        if (!field) {
+            uiLog('warn', '[WPD-CVV] fillInputField called but field is null or undefined.');
+            return false;
+        }
         const w = getTargetWin();
         let didSomething = false;
         const logLines = [];
+        uiLog('info', '[WPD-CVV] Starting CVV injection into field (' + (field.id || 'no-id') + '), Target Value Length: ' + (value || '').length);
+        
         try {
-            // Try to clear first (single character key-press simulation if short digits)
-            try { field.focus && field.focus({ preventScroll: true }); } catch (e) { }
+            try { 
+                if (field.focus) {
+                    field.focus({ preventScroll: true }); 
+                    uiLog('info', '[WPD-CVV] Field focused natively.');
+                }
+            } catch (e) { 
+                uiLog('warn', '[WPD-CVV] Failed to focus field: ' + e.message); 
+            }
 
-            // Strategy 1: direct assignment
-            try { field.value = value; didSomething = true; logLines.push('direct=ok'); } catch (e) { logLines.push('direct=err'); }
+            // 1. Native React 16+ setter
+            let setNative = false;
+            try {
+                const nativeSetter = Object.getOwnPropertyDescriptor(w.HTMLInputElement.prototype, 'value').set;
+                if (nativeSetter) {
+                    nativeSetter.call(field, value);
+                    setNative = true;
+                    logLines.push('native-setter=ok');
+                    uiLog('info', '[WPD-CVV] Successfully set value using targetWin HTMLInputElement prototype setter.');
+                }
+            } catch (e) { 
+                uiLog('warn', '[WPD-CVV] TargetWin native setter failed: ' + e.message); 
+            }
 
-            // Strategy 2: set in page-realm prototype setter
-            const realms = [];
-            try { realms.push(w.HTMLInputElement || null); } catch (e) { }
-            try { realms.push(window.HTMLInputElement || null); } catch (e) { }
-            for (const H of realms) {
+            if (!setNative) {
                 try {
-                    if (!H || !H.prototype) continue;
-                    const desc = Object.getOwnPropertyDescriptor(H.prototype, 'value');
-                    if (desc && typeof desc.set) {
-                        desc.set.call(field, value);
-                        didSomething = true;
-                        logLines.push('setter@realm ok');
-                    } else if (desc && typeof desc.value) {
-                        logLines.push('setter@realm has only getter, skipped');
+                    const nativeSetter2 = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+                    if (nativeSetter2) {
+                        nativeSetter2.call(field, value);
+                        setNative = true;
+                        logLines.push('native-setter2=ok');
+                        uiLog('info', '[WPD-CVV] Successfully set value using local window HTMLInputElement prototype setter.');
                     }
-                } catch (e) {
-                    logLines.push('setter err');
+                } catch(e) { 
+                    uiLog('warn', '[WPD-CVV] Local window native setter failed: ' + e.message); 
                 }
             }
 
-            // Strategy 3: NativeObject.getOwnPropertyDescriptor for HTMLTextAreaElement? No, leave as input.
-            // But try Object.prototype if needed
-            try {
-                const descG = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(Object.getPrototypeOf(field)), 'value');
-                if (descG && descG.set) {
-                    descG.set.call(field, value);
-                    didSomething = true;
-                    logLines.push('setter@proto2 ok');
+            if (!setNative) {
+                try { 
+                    field.value = value; 
+                    logLines.push('direct=ok'); 
+                    uiLog('info', '[WPD-CVV] Successfully set value using direct field.value assignment.');
+                } catch(e) { 
+                    uiLog('warn', '[WPD-CVV] Direct assignment failed: ' + e.message); 
                 }
-            } catch (e) { }
-
-            // Strategy 4: React 19+ custom value setter via attribute
-            try {
-                field.setAttribute('value', String(value));
-                field.defaultValue = String(value);
-                try { field.attributes.value = String(value); } catch (e) { }
-            } catch (e) { }
-
-            // Dispatch events in realistic order
-            const dispatch = (type, Evt, extra) => {
-                try {
-                    const Ctor = (typeof w[Evt] === 'function') ? w[Evt] : (typeof window[Evt] === 'function' ? window[Evt] : Event);
-                    const e = new Ctor(type, Object.assign({ bubbles: true, cancelable: true, composed: true, view: w }, extra || {}));
-                    try { Object.defineProperty(e, 'isTrusted', { value: true, configurable: true, writable: true }); } catch (e) { }
-                    field.dispatchEvent(e);
-                } catch (e) { }
-            };
-
-            // Strategy 6: Type digits one by one via InputEvents keystrokes
-            try {
-                // first reset the field (simulate backspace keys a few times)
-                dispatch('focus', 'FocusEvent', { relatedTarget: null });
-                dispatch('keydown', 'KeyboardEvent', { key: 'Control', code: 'ControlLeft' });
-                dispatch('keydown', 'KeyboardEvent', { key: 'a', code: 'KeyA', ctrlKey: true });
-                dispatch('keyup', 'KeyboardEvent', { key: 'a', code: 'KeyA', ctrlKey: true });
-                dispatch('input', 'InputEvent', { inputType: 'insertText', data: null, dataTransfer: null, isComposing: false });
-                dispatch('keyup', 'KeyboardEvent', { key: 'Control', code: 'ControlLeft' });
-
-                dispatch('keydown', 'KeyboardEvent', { key: 'Delete', code: 'Delete' });
-                dispatch('beforeinput', 'InputEvent', { inputType: 'deleteContentBackward', data: null });
-                dispatch('input', 'InputEvent', { inputType: 'deleteContentBackward', data: null });
-                dispatch('keyup', 'KeyboardEvent', { key: 'Delete', code: 'Delete' });
-            } catch (e) { }
-
-            // Now press each digit
-            const digits = String(value || '');
-            for (let i = 0; i < digits.length; i++) {
-                const ch = digits[i];
-                try {
-                    dispatch('keydown', 'KeyboardEvent', { key: ch, code: 'Digit' + ch });
-                    dispatch('beforeinput', 'InputEvent', { inputType: 'insertText', data: ch });
-                    // actually append one more time set using direct assign after each digit
-                    try { field.value = digits.substring(0, i + 1); } catch (e) { }
-                    // ensure setter on each realm
-                    for (const H of realms) {
-                        try {
-                            if (!H || !H.prototype) continue;
-                            const d = Object.getOwnPropertyDescriptor(H.prototype, 'value');
-                            if (d && d.set) d.set.call(field, digits.substring(0, i + 1));
-                        } catch (e) { }
-                    }
-                    dispatch('input', 'InputEvent', { inputType: 'insertText', data: ch });
-                    dispatch('keyup', 'KeyboardEvent', { key: ch, code: 'Digit' + ch });
-                } catch (e) { }
             }
 
-            dispatch('compositionstart', 'CompositionEvent', { data: '' });
-            dispatch('compositionend', 'CompositionEvent', { data: String(value) });
-            dispatch('input', 'InputEvent', { inputType: 'insertCompositionText', data: String(value) });
-            dispatch('change', 'Event');
-            dispatch('blur', 'BlurEvent', { relatedTarget: null });
-            try { field.blur && field.blur(); } catch (e) { }
-            try { field.focus && field.focus({ preventScroll: true }); } catch (e) { }
-            try { field.blur && field.blur(); } catch (e) { }
+            // 2. Dispatch events
+            try {
+                field.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+                uiLog('info', '[WPD-CVV] Dispatched "input" event.');
+                
+                field.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+                uiLog('info', '[WPD-CVV] Dispatched "change" event.');
+                
+                field.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', bubbles: true }));
+                uiLog('info', '[WPD-CVV] Dispatched "keyup" (Enter) event.');
+            } catch(e) { 
+                uiLog('warn', '[WPD-CVV] Event dispatch failed: ' + e.message); 
+            }
 
-            // Strategy 7: reportValidity to remove "Please enter CVV"
-            try { if (typeof field.reportValidity === 'function') { field.reportValidity(); } } catch (e) { }
-            try { if (typeof field.checkValidity === 'function') { field.checkValidity(); } } catch (e) { }
-            try { if (typeof field.setCustomValidity === 'function') { field.setCustomValidity(''); } } catch (e) { }
+            // 3. Fallback: execCommand (simulates pasting)
+            try {
+                field.focus();
+                field.select(); // Try to select existing text to overwrite
+                const execResult = document.execCommand('insertText', false, String(value));
+                if (execResult) {
+                    logLines.push('execCommand=ok');
+                    uiLog('info', '[WPD-CVV] Successfully used document.execCommand to insert text.');
+                } else {
+                    uiLog('warn', '[WPD-CVV] document.execCommand returned false (may be blocked by browser).');
+                }
+            } catch(e) { 
+                uiLog('warn', '[WPD-CVV] document.execCommand failed: ' + e.message); 
+            }
+
+            try { 
+                if (field.blur) {
+                    field.blur(); 
+                    uiLog('info', '[WPD-CVV] Field blurred.');
+                }
+            } catch (e) { }
+            
+            // 4. Force report validity
+            try { 
+                if (typeof field.reportValidity === 'function') {
+                    field.reportValidity(); 
+                    uiLog('info', '[WPD-CVV] Called reportValidity() on field.');
+                }
+            } catch (e) { }
+            
+            didSomething = true;
         } catch (e) {
             logLines.push('fatal:' + String(e));
+            uiLog('warn', '[WPD-CVV] Fatal error during injection: ' + e.message);
         }
-        console.log('[WPD] fillInputField: ' + logLines.join(' | ') + ' | final value="' + (field ? (field.value || '') : '') + '"');
+        uiLog('info', '[WPD-CVV] fillInputField Summary: ' + logLines.join(' | ') + ' | final value="' + (field ? (field.value || '') : '') + '"');
         return didSomething;
     }
 
